@@ -7,6 +7,7 @@ import {
   getWeightLog, getWorkouts, getProtocolCompliance,
 } from '@/lib/storage';
 import { getDaysUntilGoal, getWeekKey, getTodayKey, getWeekDays } from '@/lib/dateUtils';
+import WhoopWidget from '@/components/WhoopWidget';
 
 export default function DashboardPage() {
   const [ready, setReady]               = useState(false);
@@ -71,7 +72,7 @@ export default function DashboardPage() {
   const currentWeight = weightLog.length
     ? weightLog[weightLog.length - 1].weight
     : settings.currentWeight;
-  const prevWeight = weightLog.length > 1 ? weightLog[weightLog.length - 2].weight : null;
+  const prevWeight  = weightLog.length > 1 ? weightLog[weightLog.length - 2].weight : null;
   const weightDelta = prevWeight !== null ? (currentWeight - prevWeight) : null;
   const totalGain   = settings.targetWeight - settings.currentWeight;
   const progress    = totalGain > 0
@@ -155,6 +156,9 @@ export default function DashboardPage() {
           <div className="text-xs text-slate-600">This week</div>
         </div>
       </div>
+
+      {/* WHOOP widget — only renders when connected */}
+      <WhoopWidget />
 
       {/* Daily Protocol */}
       <div className="bg-slate-800 rounded-2xl p-5">

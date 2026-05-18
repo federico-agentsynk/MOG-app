@@ -28,9 +28,88 @@ function Toggle({ value, onChange }) {
   );
 }
 
+function WhoopSection() {
+  const [status, setStatus] = useState('checking'); // checking | connected | disconnected | error
+
+  useEffect(() => {
+    // Read ?whoop= param from URL without useSearchParams (avoids Suspense requirement)
+    const param = new URLSearchParams(window.location.search).get('whoop');
+    if (param === 'connected') {
+      setStatus('connected');
+      // Clean the URL param without re-render
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+    if (param === 'error') {
+      setStatus('error');
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+
+    fetch('/api/whoop/data')
+      .then((r) => r.json())
+      .then((d) => setStatus(d.connected ? 'connected' : 'disconnected'))
+      .catch(() => setStatus('disconnected'));
+  }, []);
+
+  return (
+    <div className="bg-slate-800 rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">WHOOP Integration</p>
+          <p className="text-xs text-slate-600 mt-0.5">Sync recovery &amp; sleep data</p>
+        </div>
+        {status === 'connected' && (
+          <span className="text-xs bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-1 rounded-full font-medium">
+            ✓ Connected
+          </span>
+        )}
+      </div>
+
+      {status === 'error' && (
+        <div className="mb-3 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400">
+          Connection failed. Check that your redirect URI matches exactly in your WHOOP developer app.
+        </div>
+      )}
+
+      {status === 'checking' && (
+        <div className="h-10 bg-slate-700 rounded-xl animate-pulse" />
+      )}
+
+      {status === 'connected' && (
+        <div className="space-y-2">
+          <p className="text-xs text-slate-400">
+            WHOOP is linked. Recovery and sleep data will appear on your dashboard. Tokens auto-refresh silently.
+          </p>
+          <a
+            href="/api/auth/whoop"
+            className="inline-block text-xs text-violet-400 hover:text-violet-300 underline underline-offset-2"
+          >
+            Re-authenticate
+          </a>
+        </div>
+      )}
+
+      {(status === 'disconnected' || status === 'error') && (
+        <a
+          href="/api/auth/whoop"
+          className="flex items-center justify-center gap-2 w-full py-3 bg-white hover:bg-slate-100 text-slate-900 font-semibold rounded-xl transition-colors"
+        >
+          <svg width="18" height="18" viewBox="0 0 32 32" fill="none" aria-hidden>
+            <circle cx="16" cy="16" r="16" fill="#000" />
+            <path d="M9 16c0-3.866 3.134-7 7-7s7 3.134 7 7-3.134 7-7 7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" />
+            <circle cx="16" cy="16" r="3" fill="#fff" />
+          </svg>
+          Connect WHOOP
+        </a>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
-  const [s,       setS]       = useState(null);
-  const [saved,   setSaved]   = useState(false);
+  const [s,         setS]         = useState(null);
+  const [saved,     setSaved]     = useState(false);
   const [notifPerm, setNotifPerm] = useState('unknown');
 
   const load = useCallback(() => {
@@ -73,6 +152,9 @@ export default function SettingsPage() {
   return (
     <div className="p-4 space-y-4">
       <h1 className="text-2xl font-bold text-white pt-4">Settings</h1>
+
+      {/* WHOOP Integration — top of settings for visibility */}
+      <WhoopSection />
 
       {/* Goal Settings */}
       <div className="bg-slate-800 rounded-2xl p-5 space-y-4">
