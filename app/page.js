@@ -7,6 +7,7 @@ import {
   getWeightLog, getWorkouts, getProtocolCompliance,
 } from '@/lib/storage';
 import { getDaysUntilGoal, getWeekKey, getTodayKey, getWeekDays } from '@/lib/dateUtils';
+import WhoopWidget from '@/components/WhoopWidget';
 
 export default function DashboardPage() {
   const [ready, setReady]               = useState(false);
@@ -21,49 +22,63 @@ export default function DashboardPage() {
   const [todayKey, setTodayKey]         = useState('');
   const [weekKey, setWeekKey]           = useState('');
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     const wd  = getWeekDays();
     const tok = getTodayKey();
     const wk  = getWeekKey();
     setWeekDays(wd);
     setTodayKey(tok);
     setWeekKey(wk);
-
-    const s = getSettings();
-    setSettings(s);
     setDaysLeft(getDaysUntilGoal());
-
-    const log = getWeightLog();
-    setWeightLog(log);
-
-    const workouts = getWorkouts();
-    const start = wd[0]?.key || '';
-    const end   = wd[6]?.key || '';
-    setWeekWorkouts(workouts.filter((w) => w.date >= start && w.date <= end).length);
-
-    setProtocol(getDailyProtocol(tok));
-    setHabits(getWeeklyHabits(wk));
-    setCompliance(getProtocolCompliance(wd));
+    try {
+      const [s, log, workouts, proto, hab, comp] = await Promise.all([
+        getSettings(),
+        getWeightLog(),
+        getWorkouts(),
+        getDailyProtocol(tok),
+        getWeeklyHabits(wk),
+        getProtocolCompliance(wd),
+      ]);
+      setSettings(s);
+      setWeightLog(log);
+      const start = wd[0]?.key || '';
+      const end   = wd[6]?.key || '';
+      setWeekWorkouts(workouts.filter((w) => w.date >= start && w.date <= end).length);
+      setProtocol(proto);
+      setHabits(hab);
+      setCompliance(comp);
+    } catch (err) {
+      console.error('Dashboard load error:', err);
+    }
     setReady(true);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleProtocol = (id) => {
-    toggleDailyProtocolItem(todayKey, id);
-    setProtocol({ ...getDailyProtocol(todayKey) });
-    setCompliance(getProtocolCompliance(weekDays));
+  const handleProtocol = async (id) => {
+    try {
+      const newState = await toggleDailyProtocolItem(todayKey, id);
+      setProtocol(newState);
+      const comp = await getProtocolCompliance(weekDays);
+      setCompliance(comp);
+    } catch (err) {
+      console.error('Protocol toggle error:', err);
+    }
   };
 
-  const handleHabit = (dayKey, habitId) => {
-    toggleWeeklyHabit(weekKey, dayKey, habitId);
-    setHabits({ ...getWeeklyHabits(weekKey) });
+  const handleHabit = async (dayKey, habitId) => {
+    try {
+      const newState = await toggleWeeklyHabit(weekKey, dayKey, habitId);
+      setHabits(newState);
+    } catch (err) {
+      console.error('Habit toggle error:', err);
+    }
   };
 
   if (!ready) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-slate-500">Loading…</div>
+        <div className="text-slate-500">Loading...</div>
       </div>
     );
   }
@@ -71,7 +86,7 @@ export default function DashboardPage() {
   const currentWeight = weightLog.length
     ? weightLog[weightLog.length - 1].weight
     : settings.currentWeight;
-  const prevWeight = weightLog.length > 1 ? weightLog[weightLog.length - 2].weight : null;
+  const prevWeight  = weightLog.length > 1 ? weightLog[weightLog.length - 2].weight : null;
   const weightDelta = prevWeight !== null ? (currentWeight - prevWeight) : null;
   const totalGain   = settings.targetWeight - settings.currentWeight;
   const progress    = totalGain > 0
@@ -84,8 +99,6 @@ export default function DashboardPage() {
 
   return (
     <div className="p-4 space-y-4">
-
-      {/* Header */}
       <div className="flex items-center justify-between pt-4">
         <div>
           <h1 className="text-2xl font-bold text-white">MOG Fitness</h1>
@@ -96,11 +109,10 @@ export default function DashboardPage() {
           title="Refresh"
           className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-800 text-slate-400 hover:text-white text-lg"
         >
-          ↻
+          &#8635;
         </button>
       </div>
 
-      {/* Weight Progress */}
       <div className="bg-slate-800 rounded-2xl p-5">
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-4">Weight Progress</p>
         <div className="flex items-center justify-around mb-4">
@@ -111,11 +123,11 @@ export default function DashboardPage() {
               <div className={`text-xs font-bold mt-1 ${
                 weightDelta >= 0 ? 'text-green-400' : 'text-red-400'
               }`}>
-                {weightDelta >= 0 ? '+' : ''}{weightDelta.toFixed(1)} lb
+                {weightDelta >= 0 ? '+' : ''}{(+weightDelta).toFixed(1)} lb
               </div>
             )}
           </div>
-          <div className="text-slate-600 text-3xl">→</div>
+          <div className="text-slate-600 text-3xl">&#8594;</div>
           <div className="text-center">
             <div className="text-4xl font-bold text-violet-400">{settings.targetWeight}</div>
             <div className="text-xs text-slate-500 mt-1">Target (lb)</div>
@@ -133,7 +145,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-slate-800 rounded-2xl p-4 text-center">
           <div className="text-3xl font-bold text-violet-400">{daysLeft}</div>
@@ -156,9 +167,10 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Daily Protocol */}
+      <WhoopWidget />
+
       <div className="bg-slate-800 rounded-2xl p-5">
-        <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-3">Today’s Protocol</p>
+        <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-3">Today's Protocol</p>
         <div className="space-y-2">
           {DAILY_PROTOCOL.map((item) => {
             const done = !!protocol[item.id];
@@ -175,7 +187,7 @@ export default function DashboardPage() {
                 <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
                   done ? 'bg-violet-500 border-violet-500' : 'border-slate-500'
                 }`}>
-                  {done && <span className="text-white text-xs leading-none font-bold">✓</span>}
+                  {done && <span className="text-white text-xs leading-none font-bold">&#10003;</span>}
                 </div>
                 <span className={`text-sm ${
                   done ? 'text-slate-400 line-through' : 'text-slate-200'
@@ -188,7 +200,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Weekly Habits Grid */}
       <div className="bg-slate-800 rounded-2xl p-5">
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-3">Weekly Habits</p>
         <div className="overflow-x-auto">
@@ -231,10 +242,10 @@ export default function DashboardPage() {
                                 : 'border-slate-600 hover:border-slate-500'
                             }`}
                           >
-                            {checked && <span className="text-white text-xs font-bold leading-none">✓</span>}
+                            {checked && <span className="text-white text-xs font-bold leading-none">&#10003;</span>}
                           </button>
                         ) : (
-                          <span className="text-slate-700 block text-center">—</span>
+                          <span className="text-slate-700 block text-center">&#8212;</span>
                         )}
                       </td>
                     );
